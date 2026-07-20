@@ -2,14 +2,17 @@ import "dotenv/config";
 
 import { getWorkerEnvironment } from "./config/env.js";
 import { createWorkerSupabaseClient } from "./lib/supabase.js";
-import { claimAndInspectReviewAnalysisJob } from "./queue/review-analysis-job.js";
+import { claimAndRunStaticAnalysisJob } from "./queue/review-analysis-job.js";
 
 const FALLBACK_WORKER_NAME =
   "acra-analysis-worker";
 
-let activeWorkerName = FALLBACK_WORKER_NAME;
+let activeWorkerName =
+  FALLBACK_WORKER_NAME;
 
-function shutdown(signal: string): void {
+function shutdown(
+  signal: string,
+): void {
   console.log(
     `[${activeWorkerName}] received ${signal}`,
   );
@@ -22,13 +25,22 @@ function shutdown(signal: string): void {
   process.exitCode = 0;
 }
 
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on(
+  "SIGINT",
+  () => shutdown("SIGINT"),
+);
+
+process.on(
+  "SIGTERM",
+  () => shutdown("SIGTERM"),
+);
 
 async function main(): Promise<void> {
-  const environment = getWorkerEnvironment();
+  const environment =
+    getWorkerEnvironment();
 
-  activeWorkerName = environment.WORKER_ID;
+  activeWorkerName =
+    environment.WORKER_ID;
 
   console.log(
     `[${activeWorkerName}] started successfully`,
@@ -39,33 +51,36 @@ async function main(): Promise<void> {
   );
 
   const supabase =
-    createWorkerSupabaseClient(environment);
+    createWorkerSupabaseClient(
+      environment,
+    );
 
-  await claimAndInspectReviewAnalysisJob(
+  await claimAndRunStaticAnalysisJob(
     supabase,
   );
 
   console.log(
-    `[${activeWorkerName}] controlled inspection finished`,
+    `[${activeWorkerName}] controlled static-analysis pass finished`,
   );
 
   console.log(
     `[${activeWorkerName}] waiting for shutdown`,
   );
 
-  // Temporary only. Continuous polling comes later.
   process.stdin.resume();
 }
 
-void main().catch((error: unknown) => {
-  const message =
-    error instanceof Error
-      ? error.message
-      : "Unknown worker startup error";
+void main().catch(
+  (error: unknown) => {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unknown worker startup error";
 
-  console.error(
-    `[${activeWorkerName}] startup failed: ${message}`,
-  );
+    console.error(
+      `[${activeWorkerName}] startup failed: ${message}`,
+    );
 
-  process.exitCode = 1;
-});
+    process.exitCode = 1;
+  },
+);
