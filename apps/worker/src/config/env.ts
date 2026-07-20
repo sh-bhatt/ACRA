@@ -1,5 +1,20 @@
 import { z } from "zod";
 
+const optionalEnvironmentVariable = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") {
+      return value;
+    }
+
+    const normalizedValue = value.trim();
+
+    return normalizedValue.length > 0
+      ? normalizedValue
+      : undefined;
+  },
+  z.string().min(1).optional(),
+);
+
 const workerEnvironmentSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -8,20 +23,20 @@ const workerEnvironmentSchema = z.object({
   WORKER_ID: z
     .string()
     .trim()
-    .min(1)
+    .min(1, "WORKER_ID is required")
     .default("acra-worker-local"),
 
   SUPABASE_URL: z
     .string()
+    .trim()
     .url("SUPABASE_URL must be a valid URL"),
 
-  SUPABASE_SERVICE_ROLE_KEY: z
+  SUPABASE_SECRET_KEY: z
     .string()
-    .min(1, "SUPABASE_SERVICE_ROLE_KEY is required"),
+    .trim()
+    .min(1, "SUPABASE_SECRET_KEY is required"),
 
-  OPENAI_API_KEY: z
-    .string()
-    .min(1, "OPENAI_API_KEY is required"),
+  OPENAI_API_KEY: optionalEnvironmentVariable,
 });
 
 export type WorkerEnvironment = z.infer<
@@ -36,7 +51,11 @@ export function getWorkerEnvironment(
   if (!result.success) {
     const message = result.error.issues
       .map((issue) => {
-        const path = issue.path.join(".");
+        const path =
+          issue.path.length > 0
+            ? issue.path.join(".")
+            : "environment";
+
         return `${path}: ${issue.message}`;
       })
       .join("; ");
