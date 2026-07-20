@@ -1,1 +1,1 @@
-export const DATABASE_PACKAGE = "@acra/database";
+export * from "./database.types.js";

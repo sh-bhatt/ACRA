@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import type { Database } from "@acra/database";
 
 import { getClientEnvironment } from "@/lib/env/client";
 
@@ -12,7 +13,7 @@ export async function updateSession(
 
   const environment = getClientEnvironment();
 
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     environment.NEXT_PUBLIC_SUPABASE_URL,
     environment.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {

@@ -1,3 +1,4 @@
+import type { Database } from "@acra/database";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
@@ -7,7 +8,7 @@ export async function createClient() {
   const cookieStore = await cookies();
   const environment = getClientEnvironment();
 
-  return createServerClient(
+  return createServerClient<Database>(
     environment.NEXT_PUBLIC_SUPABASE_URL,
     environment.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {
@@ -22,8 +23,8 @@ export async function createClient() {
               cookieStore.set(name, value, options);
             });
           } catch {
-            // Server Components cannot always write cookies.
-            // The authentication proxy will handle session refresh.
+            // Proxy handles session-cookie refresh when
+            // Server Components cannot write cookies.
           }
         },
       },

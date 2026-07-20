@@ -1,6 +1,10 @@
 import { z } from "zod";
 
 const clientEnvironmentSchema = z.object({
+  NEXT_PUBLIC_SITE_URL: z
+    .string()
+    .url("NEXT_PUBLIC_SITE_URL must be a valid URL"),
+
   NEXT_PUBLIC_SUPABASE_URL: z
     .string()
     .url("NEXT_PUBLIC_SUPABASE_URL must be a valid URL"),
@@ -16,6 +20,9 @@ export type ClientEnvironment = z.infer<
 
 export function getClientEnvironment(): ClientEnvironment {
   const result = clientEnvironmentSchema.safeParse({
+    NEXT_PUBLIC_SITE_URL:
+      process.env.NEXT_PUBLIC_SITE_URL,
+
     NEXT_PUBLIC_SUPABASE_URL:
       process.env.NEXT_PUBLIC_SUPABASE_URL,
 
