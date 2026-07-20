@@ -1,9 +1,17 @@
 select
-  msg_id,
-  read_ct,
-  enqueued_at,
-  vt,
-  now() as database_now,
-  vt <= now() as is_visible
-from pgmq.q_review_analysis
-order by msg_id;
+  review.id,
+  review.name,
+  review.status,
+  review.completed_at,
+  review.error_message,
+  count(finding.id)::integer as finding_count
+from public.reviews as review
+left join public.findings as finding
+  on finding.review_id = review.id
+where review.id = '286f271e-dadf-4b4d-968c-2483bb047a2f'
+group by
+  review.id,
+  review.name,
+  review.status,
+  review.completed_at,
+  review.error_message;
