@@ -2,7 +2,7 @@ import "dotenv/config";
 
 import { getWorkerEnvironment } from "./config/env.js";
 import { createWorkerSupabaseClient } from "./lib/supabase.js";
-import { claimAndRunStaticAnalysisJob } from "./queue/review-analysis-job.js";
+import { pollReviewAnalysisQueue } from "./queue/poll-review-analysis-queue.js";
 
 const FALLBACK_WORKER_NAME =
   "acra-analysis-worker";
@@ -10,29 +10,42 @@ const FALLBACK_WORKER_NAME =
 let activeWorkerName =
   FALLBACK_WORKER_NAME;
 
-function shutdown(
+let shutdownRequested = false;
+
+const shutdownController =
+  new AbortController();
+
+function requestShutdown(
   signal: string,
 ): void {
+  if (shutdownRequested) {
+    return;
+  }
+
+  shutdownRequested = true;
+
   console.log(
     `[${activeWorkerName}] received ${signal}`,
   );
 
   console.log(
-    `[${activeWorkerName}] shutting down safely`,
+    [
+      `[${activeWorkerName}] graceful shutdown requested`,
+      "current job will finish before exit",
+    ].join(" "),
   );
 
-  process.stdin.pause();
-  process.exitCode = 0;
+  shutdownController.abort();
 }
 
-process.on(
+process.once(
   "SIGINT",
-  () => shutdown("SIGINT"),
+  () => requestShutdown("SIGINT"),
 );
 
-process.on(
+process.once(
   "SIGTERM",
-  () => shutdown("SIGTERM"),
+  () => requestShutdown("SIGTERM"),
 );
 
 async function main(): Promise<void> {
@@ -55,19 +68,14 @@ async function main(): Promise<void> {
       environment,
     );
 
-  await claimAndRunStaticAnalysisJob(
+  await pollReviewAnalysisQueue(
     supabase,
+    shutdownController.signal,
   );
 
   console.log(
-    `[${activeWorkerName}] controlled static-analysis pass finished`,
+    `[${activeWorkerName}] shut down safely`,
   );
-
-  console.log(
-    `[${activeWorkerName}] waiting for shutdown`,
-  );
-
-  process.stdin.resume();
 }
 
 void main().catch(
