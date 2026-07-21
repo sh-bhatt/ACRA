@@ -4,9 +4,20 @@ import { redirect } from "next/navigation";
 import {
   NewReviewForm,
 } from "@/features/reviews/new-review-form";
+import {
+  loadExistingPastedReview,
+} from "@/features/reviews/load-review-workspace";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function NewReviewPage() {
+type NewReviewPageProps = {
+  searchParams: Promise<{
+    reviewId?: string | string[];
+  }>;
+};
+
+export default async function NewReviewPage({
+  searchParams,
+}: NewReviewPageProps) {
   const supabase = await createClient();
 
   const {
@@ -35,6 +46,26 @@ export default async function NewReviewPage() {
     );
   }
 
+  const resolvedSearchParams =
+    await searchParams;
+
+  const requestedReviewId =
+    typeof resolvedSearchParams.reviewId ===
+    "string"
+      ? resolvedSearchParams.reviewId
+      : undefined;
+
+  const initialReview = requestedReviewId
+    ? await loadExistingPastedReview(
+        requestedReviewId,
+      )
+    : null;
+
+  const initialLoadMessage =
+    requestedReviewId && !initialReview
+      ? "This saved review could not be restored. You can still start a new analysis below."
+      : null;
+
   return (
     <main className="min-h-screen bg-[#090d0c] px-5 py-8 text-white sm:px-8">
       <div className="mx-auto max-w-7xl">
@@ -46,28 +77,32 @@ export default async function NewReviewPage() {
             ← Back to dashboard
           </Link>
 
-          <p className="mt-8 font-mono text-xs uppercase tracking-[0.22em] text-emerald-300">
-            New review
+          <p className="mt-10 text-xs font-semibold uppercase tracking-[0.28em] text-emerald-300">
+            Review workspace
           </p>
 
-          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] sm:text-5xl">
-            Paste code for analysis.
+          <h1 className="mt-4 max-w-4xl text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">
+            Paste code, analyze, edit, repeat.
           </h1>
 
-          <p className="mt-4 max-w-2xl text-sm leading-7 text-neutral-500">
-            Start with one JavaScript or TypeScript file.
-            Static analysis and AI review will be connected
-            in the next stages.
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-neutral-500 sm:text-base">
+            Run static analysis without leaving the
+            editor. Results stay attached to the exact
+            submitted code snapshot.
           </p>
         </header>
 
-        <section className="py-10">
+        <div className="py-8">
           <NewReviewForm
             initialReviewFocus={
               profile.default_review_focus
             }
+            initialReview={initialReview}
+            initialLoadMessage={
+              initialLoadMessage
+            }
           />
-        </section>
+        </div>
       </div>
     </main>
   );

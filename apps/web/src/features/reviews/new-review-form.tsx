@@ -2,7 +2,9 @@
 
 import {
   useActionState,
+  useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -21,12 +23,20 @@ import {
   initialNewReviewActionState,
 } from "@/features/reviews/new-review-state";
 import {
+  ReviewAnalysisPanel,
+} from "@/features/reviews/review-analysis-panel";
+import {
   PASTE_LANGUAGE_OPTIONS,
   type PasteLanguage,
 } from "@/features/reviews/review-options";
+import type {
+  ExistingPastedReview,
+} from "@/features/reviews/review-workspace-state";
 
 type NewReviewFormProps = {
   initialReviewFocus: string[];
+  initialReview: ExistingPastedReview | null;
+  initialLoadMessage: string | null;
 };
 
 function isReviewFocusValue(
@@ -39,18 +49,30 @@ function isReviewFocusValue(
 
 export function NewReviewForm({
   initialReviewFocus,
+  initialReview,
+  initialLoadMessage,
 }: NewReviewFormProps) {
   const normalizedInitialFocus =
-  useMemo<ReviewFocusValue[]>(() => {
-    const validFocus =
-      initialReviewFocus.filter(
-        isReviewFocusValue,
-      );
+    useMemo<ReviewFocusValue[]>(() => {
+      if (
+        initialReview &&
+        initialReview.reviewFocus.length > 0
+      ) {
+        return initialReview.reviewFocus;
+      }
 
-    return validFocus.length > 0
-      ? validFocus
-      : ["full"];
-  }, [initialReviewFocus]);
+      const validFocus =
+        initialReviewFocus.filter(
+          isReviewFocusValue,
+        );
+
+      return validFocus.length > 0
+        ? validFocus
+        : ["full"];
+    }, [
+      initialReview,
+      initialReviewFocus,
+    ]);
 
   const [
     selectedFocus,
@@ -59,10 +81,24 @@ export function NewReviewForm({
     normalizedInitialFocus,
   );
 
-  const [language, setLanguage] =
-    useState<PasteLanguage>("typescript");
+  const [name, setName] = useState(
+    initialReview?.name ?? "",
+  );
 
-  const [code, setCode] = useState("");
+  const [language, setLanguage] =
+    useState<PasteLanguage>(
+      initialReview?.language ??
+        "typescript",
+    );
+
+  const [code, setCode] = useState(
+    initialReview?.code ?? "",
+  );
+
+  const submittedCodeRef =
+    useRef<string>(
+      initialReview?.code ?? "",
+    );
 
   const [
     state,
@@ -72,6 +108,32 @@ export function NewReviewForm({
     createPastedReviewAction,
     initialNewReviewActionState,
   );
+
+  useEffect(() => {
+    if (
+      state.status !== "success" ||
+      !state.reviewId
+    ) {
+      return;
+    }
+
+    const currentUrl =
+      new URL(window.location.href);
+
+    currentUrl.searchParams.set(
+      "reviewId",
+      state.reviewId,
+    );
+
+    window.history.replaceState(
+      null,
+      "",
+      `${currentUrl.pathname}${currentUrl.search}`,
+    );
+  }, [
+    state.reviewId,
+    state.status,
+  ]);
 
   const lineCount =
     code.length === 0
@@ -83,6 +145,15 @@ export function NewReviewForm({
 
   const isTooLarge =
     sizeBytes > 200_000;
+
+  const activeReviewId =
+    state.reviewId ??
+    initialReview?.id ??
+    null;
+
+  const isAnalysisStale =
+    Boolean(activeReviewId) &&
+    code !== submittedCodeRef.current;
 
   function updateFocus(
     value: ReviewFocusValue,
@@ -116,11 +187,22 @@ export function NewReviewForm({
     });
   }
 
+  const statusMessageClassName =
+    state.status === "error"
+      ? "border-red-400/20 bg-red-400/10 text-red-200"
+      : state.queued
+        ? "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100"
+        : "border-amber-300/20 bg-amber-300/[0.08] text-amber-100";
+
   return (
-    <form
-      action={formAction}
-      className="space-y-8"
-    >
+    <div className="space-y-8">
+      <form
+        action={formAction}
+        onSubmit={() => {
+          submittedCodeRef.current = code;
+        }}
+        className="space-y-8"
+      >
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
         <div className="space-y-2">
           <label
@@ -136,6 +218,10 @@ export function NewReviewForm({
             type="text"
             maxLength={100}
             required
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+            }}
             placeholder="Authentication helper review"
             className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.035] px-4 text-sm text-white outline-none transition placeholder:text-neutral-600 focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/10"
           />
@@ -277,10 +363,20 @@ export function NewReviewForm({
         ) : null}
       </section>
 
+      {initialLoadMessage ? (
+        <p className="rounded-xl border border-amber-300/20 bg-amber-300/[0.07] px-4 py-3 text-sm text-amber-100">
+          {initialLoadMessage}
+        </p>
+      ) : null}
+
       {state.message ? (
         <p
-          role="alert"
-          className="rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200"
+          role={
+            state.status === "error"
+              ? "alert"
+              : "status"
+          }
+          className={`rounded-xl border px-4 py-3 text-sm ${statusMessageClassName}`}
         >
           {state.message}
         </p>
@@ -302,10 +398,21 @@ export function NewReviewForm({
           className="inline-flex h-12 items-center rounded-xl bg-emerald-300 px-6 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isPending
-            ? "Saving secure draft..."
-            : "Create review"}
+            ? "Creating and queuing review..."
+            : activeReviewId
+              ? "Run analysis again"
+              : "Run static analysis"}
         </button>
       </div>
-    </form>
+      </form>
+
+      {activeReviewId ? (
+        <ReviewAnalysisPanel
+          key={activeReviewId}
+          reviewId={activeReviewId}
+          isStale={isAnalysisStale}
+        />
+      ) : null}
+    </div>
   );
 }

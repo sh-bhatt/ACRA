@@ -1,4 +1,9 @@
 import { createHash } from "node:crypto";
+
+import type {
+    StaticScoreFileMetrics,
+    StaticScoreFinding,
+} from "@acra/review-schema";
 import { analyzeSourceComplexity } from "../analyzers/complexity-analyzer.js";
 import { z } from "zod";
 import { persistComplexityMetricsForFile } from "../complexity/persist-complexity-metrics.js";
@@ -11,6 +16,7 @@ import { persistStaticFindingsForFile } from "../findings/persist-static-finding
 import type { WorkerSupabaseClient } from "../lib/supabase.js";
 import { finalizeStaticAnalysisJob } from "../reviews/finalize-static-analysis.js";
 import { ensureReviewStaticAnalysisStatus } from "../reviews/review-status.js";
+import { calculateStaticReviewScore } from "../scoring/calculate-static-review-score.js";
 
 import {
     classifyReviewAnalysisFailure,
@@ -291,6 +297,12 @@ export async function claimAndRunStaticAnalysisJob(
         let totalPersistedFindingCount = 0;
         let persistedComplexityFileCount = 0;
 
+        const scoreFindings:
+            StaticScoreFinding[] = [];
+
+        const scoreFiles:
+            StaticScoreFileMetrics[] = [];
+
         for (const file of files) {
             const languageResult =
                 eslintSupportedLanguageSchema.safeParse(
@@ -384,6 +396,11 @@ export async function claimAndRunStaticAnalysisJob(
                     `maintainability=${complexityMetrics.maintainabilityScore}`,
                 ].join(" "),
             );
+
+            scoreFiles.push({
+                fileId: file.id,
+                ...complexityMetrics,
+            });
 
             await persistComplexityMetricsForFile(
                 supabase,
@@ -520,6 +537,18 @@ export async function claimAndRunStaticAnalysisJob(
                 );
             }
 
+            scoreFindings.push(
+                ...normalizedFindings.map(
+                    (normalizedFinding) => ({
+                        severity:
+                            normalizedFinding.finding.severity,
+
+                        fingerprint:
+                            normalizedFinding.fingerprint,
+                    }),
+                ),
+            );
+
             totalNormalizedFindingCount +=
                 normalizedFindings.length;
 
@@ -579,6 +608,48 @@ export async function claimAndRunStaticAnalysisJob(
             );
         }
 
+        if (
+            scoreFindings.length !==
+            totalNormalizedFindingCount
+        ) {
+            throw new Error(
+                [
+                    "Static score finding-count mismatch.",
+                    `Expected ${totalNormalizedFindingCount},`,
+                    `received ${scoreFindings.length}.`,
+                ].join(" "),
+            );
+        }
+
+        if (
+            scoreFiles.length !==
+            files.length
+        ) {
+            throw new Error(
+                [
+                    "Static score file-count mismatch.",
+                    `Expected ${files.length},`,
+                    `received ${scoreFiles.length}.`,
+                ].join(" "),
+            );
+        }
+
+        const scoreBreakdown =
+            calculateStaticReviewScore({
+                findings: scoreFindings,
+                files: scoreFiles,
+            });
+
+        console.log(
+            [
+                "[score] deterministic score calculated",
+                `overall=${scoreBreakdown.overallScore}`,
+                `severity_deduction=${scoreBreakdown.severity.totalDeduction}`,
+                `structural_deduction=${scoreBreakdown.structural.totalDeduction}`,
+                `applied_deduction=${scoreBreakdown.appliedDeduction}`,
+            ].join(" "),
+        );
+
         console.log(
             [
                 "[queue] static analysis completed successfully",
@@ -613,6 +684,7 @@ export async function claimAndRunStaticAnalysisJob(
                 reviewId: review.id,
                 userId: message.userId,
                 messageId: claimedJob.msg_id,
+                scoreBreakdown,
             },
         );
 
