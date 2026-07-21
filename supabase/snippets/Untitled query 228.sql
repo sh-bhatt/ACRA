@@ -1,8 +1,12 @@
 select
-  id,
-  status,
-  retry_count,
-  error_message,
-  completed_at
-from public.reviews
-where id = '6b9ff32d-f0f4-4946-a9b8-fa39d02141f6';
+  r.id as review_id,
+  r.user_id,
+  r.status,
+  r.retry_count,
+  rf.id as file_id,
+  rf.original_name
+from
+  public.reviews as r
+  inner join public.review_files as rf on rf.review_id = r.id
+where
+  r.id = '5db66e08-a19e-4d55-9110-0976cffae074';

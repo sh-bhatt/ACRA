@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-
+import { analyzeSourceComplexity } from "../analyzers/complexity-analyzer.js";
 import { z } from "zod";
-
+import { persistComplexityMetricsForFile } from "../complexity/persist-complexity-metrics.js";
 import {
     analyzeSourceWithEslint,
     eslintSupportedLanguageSchema,
@@ -289,6 +289,7 @@ export async function claimAndRunStaticAnalysisJob(
 
         let totalNormalizedFindingCount = 0;
         let totalPersistedFindingCount = 0;
+        let persistedComplexityFileCount = 0;
 
         for (const file of files) {
             const languageResult =
@@ -361,6 +362,45 @@ export async function claimAndRunStaticAnalysisJob(
                     `bytes=${downloadedSize}`,
                     `lines=${file.line_count}`,
                     "sha256=matched",
+                ].join(" "),
+            );
+
+            const complexityMetrics =
+                analyzeSourceComplexity({
+                    fileName: file.original_name,
+                    language: languageResult.data,
+                    sourceText,
+                });
+
+            console.log(
+                [
+                    `[complexity] analyzed "${file.original_name}"`,
+                    `loc=${complexityMetrics.linesOfCode}`,
+                    `functions=${complexityMetrics.functionCount}`,
+                    `classes=${complexityMetrics.classCount}`,
+                    `imports=${complexityMetrics.importCount}`,
+                    `cyclomatic=${complexityMetrics.cyclomaticComplexity}`,
+                    `nesting=${complexityMetrics.maximumNestingDepth}`,
+                    `maintainability=${complexityMetrics.maintainabilityScore}`,
+                ].join(" "),
+            );
+
+            await persistComplexityMetricsForFile(
+                supabase,
+                {
+                    reviewId: review.id,
+                    fileId: file.id,
+                    userId: message.userId,
+                    metrics: complexityMetrics,
+                },
+            );
+
+            persistedComplexityFileCount += 1;
+
+            console.log(
+                [
+                    "[complexity] persisted",
+                    `file="${file.original_name}"`,
                 ].join(" "),
             );
 
@@ -512,7 +552,7 @@ export async function claimAndRunStaticAnalysisJob(
                 ].join(" "),
             );
         }
-        
+
         if (
             totalPersistedFindingCount !==
             totalNormalizedFindingCount
@@ -522,6 +562,19 @@ export async function claimAndRunStaticAnalysisJob(
                     "Review finding persistence mismatch.",
                     `Normalized: ${totalNormalizedFindingCount}.`,
                     `Persisted: ${totalPersistedFindingCount}.`,
+                ].join(" "),
+            );
+        }
+
+        if (
+            persistedComplexityFileCount !==
+            files.length
+        ) {
+            throw new Error(
+                [
+                    "Complexity persistence count mismatch.",
+                    `Expected ${files.length},`,
+                    `persisted ${persistedComplexityFileCount}.`,
                 ].join(" "),
             );
         }
@@ -538,6 +591,13 @@ export async function claimAndRunStaticAnalysisJob(
             [
                 "[queue] static findings persisted successfully",
                 `persisted=${totalPersistedFindingCount}`,
+            ].join(" "),
+        );
+
+        console.log(
+            [
+                "[queue] complexity metrics persisted successfully",
+                `files=${persistedComplexityFileCount}`,
             ].join(" "),
         );
 

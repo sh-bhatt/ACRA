@@ -168,6 +168,18 @@ export function classifyReviewAnalysisFailure(
 
   if (
     startsWithAny(message, [
+      "Complexity analysis exceeded",
+    ])
+  ) {
+    return {
+      safeMessage:
+        "Code complexity analysis timed out before it could finish.",
+      isUnrecoverable: false,
+    };
+  }
+
+  if (
+    startsWithAny(message, [
       "Unable to persist static findings:",
       "Static finding persistence count mismatch.",
       "Static findings RPC returned an invalid inserted count",
@@ -176,6 +188,20 @@ export function classifyReviewAnalysisFailure(
     return {
       safeMessage:
         "Static analysis findings could not be saved.",
+      isUnrecoverable: false,
+    };
+  }
+
+  if (
+    startsWithAny(message, [
+      "Unable to persist complexity metrics:",
+      "Complexity metrics persistence returned an unexpected result",
+      "Complexity persistence count mismatch.",
+    ])
+  ) {
+    return {
+      safeMessage:
+        "Code complexity metrics could not be saved.",
       isUnrecoverable: false,
     };
   }
