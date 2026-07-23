@@ -1,67 +1,67 @@
 import {
-  staticReviewScoreBreakdownSchema,
+    staticReviewScoreBreakdownSchema,
 } from "@acra/review-schema";
 
 import {
-  type ReviewAnalysisSnapshotResult,
-  type ReviewProcessingStatus,
+    type ReviewAnalysisSnapshotResult,
+    type ReviewProcessingStatus,
 } from "@/features/reviews/review-analysis-state";
 import { createClient } from "@/lib/supabase/server";
 
 type ReviewAnalysisRouteContext = {
-  params: Promise<{
-    reviewId: string;
-  }>;
+    params: Promise<{
+        reviewId: string;
+    }>;
 };
 
 export const dynamic = "force-dynamic";
 
 function jsonResponse(
-  body: ReviewAnalysisSnapshotResult,
-  status = 200,
+    body: ReviewAnalysisSnapshotResult,
+    status = 200,
 ): Response {
-  return Response.json(body, {
-    status,
-    headers: {
-      "Cache-Control":
-        "no-store, max-age=0",
-    },
-  });
+    return Response.json(body, {
+        status,
+        headers: {
+            "Cache-Control":
+                "no-store, max-age=0",
+        },
+    });
 }
 
 export async function GET(
-  _request: Request,
-  context: ReviewAnalysisRouteContext,
+    _request: Request,
+    context: ReviewAnalysisRouteContext,
 ): Promise<Response> {
-  const { reviewId } = await context.params;
+    const { reviewId } = await context.params;
 
-  const supabase = await createClient();
+    const supabase = await createClient();
 
-  const {
-    data: claimsData,
-    error: claimsError,
-  } = await supabase.auth.getClaims();
+    const {
+        data: claimsData,
+        error: claimsError,
+    } = await supabase.auth.getClaims();
 
-  const userId = claimsData?.claims?.sub;
+    const userId = claimsData?.claims?.sub;
 
-  if (claimsError || !userId) {
-    return jsonResponse(
-      {
-        ok: false,
-        message:
-          "Your session has expired. Please sign in again.",
-      },
-      401,
-    );
-  }
+    if (claimsError || !userId) {
+        return jsonResponse(
+            {
+                ok: false,
+                message:
+                    "Your session has expired. Please sign in again.",
+            },
+            401,
+        );
+    }
 
-  const {
-    data: review,
-    error: reviewError,
-  } = await supabase
-    .from("reviews")
-    .select(
-      `
+    const {
+        data: review,
+        error: reviewError,
+    } = await supabase
+        .from("reviews")
+        .select(
+            `
         id,
         name,
         status,
@@ -70,53 +70,57 @@ export async function GET(
         overall_score,
         score_breakdown
       `,
-    )
-    .eq("id", reviewId)
-    .eq("user_id", userId)
-    .maybeSingle();
+        )
+        .eq("id", reviewId)
+        .eq("user_id", userId)
+        .maybeSingle();
 
-  if (reviewError) {
-    console.error(
-      "Unable to load review analysis:",
-      reviewError.message,
-    );
+    if (reviewError) {
+        console.error(
+            "Unable to load review analysis:",
+            reviewError.message,
+        );
 
-    return jsonResponse(
-      {
-        ok: false,
-        message:
-          "The requested review could not be loaded.",
-      },
-      500,
-    );
-  }
+        return jsonResponse(
+            {
+                ok: false,
+                message:
+                    "The requested review could not be loaded.",
+            },
+            500,
+        );
+    }
 
-  if (!review) {
-    return jsonResponse(
-      {
-        ok: false,
-        message:
-          "The requested review could not be found.",
-      },
-      404,
-    );
-  }
+    if (!review) {
+        return jsonResponse(
+            {
+                ok: false,
+                message:
+                    "The requested review could not be found.",
+            },
+            404,
+        );
+    }
 
-  const [
-    filesResult,
-    findingsResult,
-    complexityResult,
-  ] = await Promise.all([
-    supabase
-      .from("review_files")
-      .select("id,original_name")
-      .eq("review_id", review.id)
-      .eq("user_id", userId),
+    const [
+        filesResult,
+        findingsResult,
+        complexityResult,
+        aiReviewResult,
+        aiFindingsResult,
+    ] = await Promise.all([
 
-    supabase
-      .from("findings")
-      .select(
-        `
+
+        supabase
+            .from("review_files")
+            .select("id,original_name")
+            .eq("review_id", review.id)
+            .eq("user_id", userId),
+
+        supabase
+            .from("findings")
+            .select(
+                `
           id,
           file_id,
           source,
@@ -131,17 +135,17 @@ export async function GET(
           line_end,
           created_at
         `,
-      )
-      .eq("review_id", review.id)
-      .eq("user_id", userId)
-      .order("created_at", {
-        ascending: true,
-      }),
+            )
+            .eq("review_id", review.id)
+            .eq("user_id", userId)
+            .order("created_at", {
+                ascending: true,
+            }),
 
-    supabase
-      .from("complexity_metrics")
-      .select(
-        `
+        supabase
+            .from("complexity_metrics")
+            .select(
+                `
           id,
           file_id,
           lines_of_code,
@@ -157,130 +161,198 @@ export async function GET(
           maintainability_score,
           created_at
         `,
-      )
-      .eq("review_id", review.id)
-      .eq("user_id", userId)
-      .order("created_at", {
-        ascending: true,
-      }),
-  ]);
+            )
+            .eq("review_id", review.id)
+            .eq("user_id", userId)
+            .order("created_at", {
+                ascending: true,
+            }),
 
-  if (
-    filesResult.error ||
-    findingsResult.error ||
-    complexityResult.error
-  ) {
-    console.error(
-      "Unable to load review analysis data:",
-      filesResult.error?.message ??
-        findingsResult.error?.message ??
-        complexityResult.error?.message,
-    );
+        supabase
+            .from("ai_reviews")
+            .select(`
+    summary,
+    strengths,
+    refactoring_plan,
+    generated_documentation
+  `)
+            .eq("review_id", review.id)
+            .maybeSingle(),
 
-    return jsonResponse(
-      {
-        ok: false,
-        message:
-          "The latest analysis data could not be loaded.",
-      },
-      500,
-    );
-  }
+        supabase
+            .from("ai_review_findings")
+            .select(`
+    id,
+    title,
+    category,
+    severity,
+    confidence,
+    file_name,
+    line_start,
+    line_end,
+    explanation,
+    suggested_fix,
+    replacement_code
+  `)
+            .eq("review_id", review.id),
+    ]);
 
-  const fileNames = new Map(
-    (filesResult.data ?? []).map((file) => [
-      file.id,
-      file.original_name,
-    ]),
-  );
+    if (
+        filesResult.error ||
+        findingsResult.error ||
+        complexityResult.error ||
+        aiReviewResult.error ||
+        aiFindingsResult.error
+    ) {
+        console.log("files:", filesResult.error);
+        console.log("findings:", findingsResult.error);
+        console.log("complexity:", complexityResult.error);
+        console.log("aiReview:", aiReviewResult.error);
+        console.log("aiFindings:", aiFindingsResult.error);
 
-  const parsedScoreBreakdown =
-    review.score_breakdown === null
-      ? null
-      : staticReviewScoreBreakdownSchema.safeParse(
-          review.score_breakdown,
+        return jsonResponse(
+            {
+                ok: false,
+                message:
+                    "The latest analysis data could not be loaded.",
+            },
+            500,
         );
+    }
 
-  if (
-    parsedScoreBreakdown !== null &&
-    !parsedScoreBreakdown.success
-  ) {
-    console.error(
-      "Stored score breakdown is invalid:",
-      parsedScoreBreakdown.error.message,
+    const fileNames = new Map(
+        (filesResult.data ?? []).map((file) => [
+            file.id,
+            file.original_name,
+        ]),
     );
-  }
 
-  return jsonResponse({
-    ok: true,
-    data: {
-      review: {
-        id: review.id,
-        name: review.name,
-        status:
-          review.status as ReviewProcessingStatus,
-        retryCount: review.retry_count,
-        errorMessage: review.error_message,
-        overallScore: review.overall_score,
-        scoreBreakdown:
-          parsedScoreBreakdown?.success
-            ? parsedScoreBreakdown.data
-            : null,
-      },
+    const parsedScoreBreakdown =
+        review.score_breakdown === null
+            ? null
+            : staticReviewScoreBreakdownSchema.safeParse(
+                review.score_breakdown,
+            );
 
-      findings: (
-        findingsResult.data ?? []
-      ).map((finding) => ({
-        id: finding.id,
-        fileId: finding.file_id,
-        fileName:
-          fileNames.get(finding.file_id) ??
-          "Unknown file",
-        source: finding.source,
-        ruleId: finding.rule_id,
-        category: finding.category,
-        severity: finding.severity,
-        title: finding.title,
-        explanation: finding.explanation,
-        suggestedFix:
-          finding.suggested_fix,
-        replacementCode:
-          finding.replacement_code,
-        lineStart: finding.line_start,
-        lineEnd: finding.line_end,
-      })),
+    if (
+        parsedScoreBreakdown !== null &&
+        !parsedScoreBreakdown.success
+    ) {
+        console.error(
+            "Stored score breakdown is invalid:",
+            parsedScoreBreakdown.error.message,
+        );
+    }
 
-      complexityMetrics: (
-        complexityResult.data ?? []
-      ).map((metrics) => ({
-        id: metrics.id,
-        fileId: metrics.file_id,
-        fileName:
-          fileNames.get(metrics.file_id) ??
-          "Unknown file",
-        linesOfCode:
-          metrics.lines_of_code,
-        blankLines:
-          metrics.blank_lines,
-        commentLines:
-          metrics.comment_lines,
-        functionCount:
-          metrics.function_count,
-        classCount:
-          metrics.class_count,
-        importCount:
-          metrics.import_count,
-        cyclomaticComplexity:
-          metrics.cyclomatic_complexity,
-        maximumNestingDepth:
-          metrics.maximum_nesting_depth,
-        averageFunctionLength:
-          metrics.average_function_length,
-        maximumFunctionLength:
-          metrics.maximum_function_length,
-        maintainabilityScore:
-          metrics.maintainability_score,
-      })),
-    },
-  });
+    return jsonResponse({
+        ok: true,
+        data: {
+            review: {
+                id: review.id,
+                name: review.name,
+                status:
+                    review.status as ReviewProcessingStatus,
+                retryCount: review.retry_count,
+                errorMessage: review.error_message,
+                overallScore: review.overall_score,
+                scoreBreakdown:
+                    parsedScoreBreakdown?.success
+                        ? parsedScoreBreakdown.data
+                        : null,
+            },
+
+            findings: (
+                findingsResult.data ?? []
+            ).map((finding) => ({
+                id: finding.id,
+                fileId: finding.file_id,
+                fileName:
+                    fileNames.get(finding.file_id) ??
+                    "Unknown file",
+                source: finding.source,
+                ruleId: finding.rule_id,
+                category: finding.category,
+                severity: finding.severity,
+                title: finding.title,
+                explanation: finding.explanation,
+                suggestedFix:
+                    finding.suggested_fix,
+                replacementCode:
+                    finding.replacement_code,
+                lineStart: finding.line_start,
+                lineEnd: finding.line_end,
+            })),
+
+            complexityMetrics: (
+                complexityResult.data ?? []
+            ).map((metrics) => ({
+                id: metrics.id,
+                fileId: metrics.file_id,
+                fileName:
+                    fileNames.get(metrics.file_id) ??
+                    "Unknown file",
+                linesOfCode:
+                    metrics.lines_of_code,
+                blankLines:
+                    metrics.blank_lines,
+                commentLines:
+                    metrics.comment_lines,
+                functionCount:
+                    metrics.function_count,
+                classCount:
+                    metrics.class_count,
+                importCount:
+                    metrics.import_count,
+                cyclomaticComplexity:
+                    metrics.cyclomatic_complexity,
+                maximumNestingDepth:
+                    metrics.maximum_nesting_depth,
+                averageFunctionLength:
+                    metrics.average_function_length,
+                maximumFunctionLength:
+                    metrics.maximum_function_length,
+                maintainabilityScore:
+                    metrics.maintainability_score,
+            })),
+            aiReview:
+                aiReviewResult.data == null
+                    ? null
+                    : {
+                        summary:
+                            aiReviewResult.data.summary,
+
+                        strengths:
+                            (aiReviewResult.data.strengths ?? []) as string[],
+
+                        refactoringPlan:
+                            (aiReviewResult.data.refactoring_plan ?? []) as string[],
+
+                        generatedDocumentation:
+                            aiReviewResult.data.generated_documentation,
+
+                        findings: (
+                            aiFindingsResult.data ?? []
+                        ).map((finding) => ({
+                            id: finding.id,
+                            title: finding.title,
+                            category: finding.category,
+                            severity: finding.severity,
+                            confidence:
+                                finding.confidence,
+                            fileName:
+                                finding.file_name,
+                            lineStart:
+                                finding.line_start,
+                            lineEnd:
+                                finding.line_end,
+                            explanation:
+                                finding.explanation,
+                            suggestedFix:
+                                finding.suggested_fix,
+                            replacementCode:
+                                finding.replacement_code,
+                        })),
+                    },
+        },
+    });
 }

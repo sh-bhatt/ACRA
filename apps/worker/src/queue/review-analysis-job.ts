@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
-
+import { generateAIReview } from "../ai/generate-ai-review.js";
+import type {
+    ReviewFinding,
+} from "@acra/review-schema";
+import { persistAIReview } from "../ai/persist-ai-review.js";
+import { getWorkerEnvironment } from "../config/env.js";
 import type {
     StaticScoreFileMetrics,
     StaticScoreFinding,
@@ -17,7 +22,9 @@ import type { WorkerSupabaseClient } from "../lib/supabase.js";
 import { finalizeStaticAnalysisJob } from "../reviews/finalize-static-analysis.js";
 import { ensureReviewStaticAnalysisStatus } from "../reviews/review-status.js";
 import { calculateStaticReviewScore } from "../scoring/calculate-static-review-score.js";
-
+import type {
+    ReviewComplexityMetric,
+} from "../ai/build-review-prompt.js";
 import {
     classifyReviewAnalysisFailure,
     deleteInvalidReviewAnalysisJob,
@@ -125,6 +132,8 @@ function calculateSha256(
 export async function claimAndRunStaticAnalysisJob(
     supabase: WorkerSupabaseClient,
 ): Promise<void> {
+    const workerEnvironment = getWorkerEnvironment();
+
     const { data, error } = await supabase.rpc(
         "read_review_analysis_job",
         {
@@ -303,6 +312,16 @@ export async function claimAndRunStaticAnalysisJob(
         const scoreFiles:
             StaticScoreFileMetrics[] = [];
 
+
+        const reviewSourceFiles: {
+            fileName: string;
+            content: string;
+        }[] = [];
+
+        const aiFindings: ReviewFinding[] = [];
+        const aiComplexity: ReviewComplexityMetric[] = [];
+        const normalizedFindingsForPrompt: ReviewFinding[] = [];
+
         for (const file of files) {
             const languageResult =
                 eslintSupportedLanguageSchema.safeParse(
@@ -337,6 +356,11 @@ export async function claimAndRunStaticAnalysisJob(
 
             const sourceText =
                 await sourceFile.text();
+
+            reviewSourceFiles.push({
+                fileName: file.original_name,
+                content: sourceText,
+            });
 
             const downloadedSize =
                 Buffer.byteLength(
@@ -383,7 +407,10 @@ export async function claimAndRunStaticAnalysisJob(
                     language: languageResult.data,
                     sourceText,
                 });
-
+            aiComplexity.push({
+                fileName: file.original_name,
+                metrics: complexityMetrics,
+            });
             console.log(
                 [
                     `[complexity] analyzed "${file.original_name}"`,
@@ -401,6 +428,8 @@ export async function claimAndRunStaticAnalysisJob(
                 fileId: file.id,
                 ...complexityMetrics,
             });
+
+
 
             await persistComplexityMetricsForFile(
                 supabase,
@@ -549,6 +578,16 @@ export async function claimAndRunStaticAnalysisJob(
                 ),
             );
 
+            const reviewFindings = normalizedFindings.map(
+                finding => finding.finding,
+            );
+
+            aiFindings.push(...reviewFindings);
+
+            normalizedFindingsForPrompt.push(
+                ...reviewFindings,
+            );
+
             totalNormalizedFindingCount +=
                 normalizedFindings.length;
 
@@ -640,6 +679,39 @@ export async function claimAndRunStaticAnalysisJob(
                 files: scoreFiles,
             });
 
+        let aiReview: Awaited<
+            ReturnType<typeof generateAIReview>
+        > | null = null;
+
+        if (
+            workerEnvironment.AI_REVIEW_ENABLED
+        ) {
+            console.log(
+                "[ai] generating review...",
+            );
+
+            aiReview =
+                await generateAIReview({
+                    reviewName: review.name,
+
+                    reviewFocus: [],
+
+                    files: reviewSourceFiles.map(file => ({
+                        fileName: file.fileName,
+                        language: review.primary_language,
+                        sourceCode: file.content,
+                    })),
+
+                    staticFindings: normalizedFindingsForPrompt,
+
+                    complexity: aiComplexity,
+                });
+
+            console.log(
+                `[ai] generated ${aiReview.findings.length} findings`,
+            );
+        }
+
         console.log(
             [
                 "[score] deterministic score calculated",
@@ -678,6 +750,25 @@ export async function claimAndRunStaticAnalysisJob(
          *
          * The queue message must never be archived before this point.
          */
+
+        if (aiReview) {
+            console.log(
+                "[ai] persisting review...",
+            );
+
+            await persistAIReview(
+                supabase,
+                {
+                    reviewId: review.id,
+                    review: aiReview,
+                },
+            );
+
+            console.log(
+                "[ai] review saved",
+            );
+        }
+
         await finalizeStaticAnalysisJob(
             supabase,
             {
@@ -700,10 +791,22 @@ export async function claimAndRunStaticAnalysisJob(
             "[queue] static-analysis job finalized successfully",
         );
     } catch (error: unknown) {
+
+        console.error("================================");
+        console.error("RAW ERROR");
+        console.error(error);
+        console.error("================================");
+
         const failure =
             classifyReviewAnalysisFailure(
                 error,
             );
+        console.error(
+            "RAW ERROR:",
+            error instanceof Error
+                ? error.stack
+                : error,
+        );
 
         const failureResult =
             await recordReviewAnalysisFailure(

@@ -51,11 +51,14 @@ export type ReviewAnalysisSnapshot = {
     retryCount: number;
     errorMessage: string | null;
     overallScore: number | null;
-    scoreBreakdown:
-      StaticReviewScoreBreakdown | null;
+    scoreBreakdown: StaticReviewScoreBreakdown | null;
   };
+
   findings: ReviewAnalysisFinding[];
+
   complexityMetrics: ReviewComplexityMetrics[];
+
+  aiReview: AIReview | null;   // ✅ YAHAN HONA CHAHIYE
 };
 
 export type ReviewAnalysisSnapshotResult =
@@ -67,3 +70,24 @@ export type ReviewAnalysisSnapshotResult =
       ok: false;
       message: string;
     };
+    export type AIReviewFinding = {
+  id: string;
+  title: string;
+  category: string;
+  severity: string;
+  confidence: number;
+  fileName: string | null;
+  lineStart: number | null;
+  lineEnd: number | null;
+  explanation: string;
+  suggestedFix: string | null;
+  replacementCode: string | null;
+};
+
+export type AIReview = {
+  summary: string;
+  strengths: string[];
+  refactoringPlan: string[];
+  generatedDocumentation: string | null;
+  findings: AIReviewFinding[];
+};
