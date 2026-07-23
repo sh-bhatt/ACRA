@@ -4,7 +4,7 @@ import {
   useActionState,
   useEffect,
   useMemo,
-  useRef,
+  
   useState,
 } from "react";
 
@@ -95,10 +95,7 @@ export function NewReviewForm({
     initialReview?.code ?? "",
   );
 
-  const submittedCodeRef =
-    useRef<string>(
-      initialReview?.code ?? "",
-    );
+  const [submittedCode, setSubmittedCode] = useState("");
 
   const [
     state,
@@ -153,7 +150,7 @@ export function NewReviewForm({
 
   const isAnalysisStale =
     Boolean(activeReviewId) &&
-    code !== submittedCodeRef.current;
+    submittedCode !== code;
 
   function updateFocus(
     value: ReviewFocusValue,
@@ -199,7 +196,7 @@ export function NewReviewForm({
       <form
         action={formAction}
         onSubmit={() => {
-          submittedCodeRef.current = code;
+          setSubmittedCode(code);
         }}
         className="space-y-8"
       >
