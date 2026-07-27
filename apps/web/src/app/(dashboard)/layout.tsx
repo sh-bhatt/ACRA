@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 type DashboardLayoutProps = {
   children: ReactNode;
 };
-
+export const dynamic = "force-dynamic";
 export default async function DashboardLayout({
   children,
 }: DashboardLayoutProps) {

@@ -51,14 +51,14 @@ export default async function NewReviewPage({
 
   const requestedReviewId =
     typeof resolvedSearchParams.reviewId ===
-      "string"
+    "string"
       ? resolvedSearchParams.reviewId
       : undefined;
 
   const initialReview = requestedReviewId
     ? await loadExistingPastedReview(
-      requestedReviewId,
-    )
+        requestedReviewId,
+      )
     : null;
 
   const initialLoadMessage =
@@ -104,8 +104,8 @@ export default async function NewReviewPage({
           /> */}
 
           <div className="text-white">
-            TEST PAGE
-          </div>
+  TEST PAGE
+</div>
         </div>
       </div>
     </main>
