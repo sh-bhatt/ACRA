@@ -1,0 +1,4 @@
+{
+  "buildCommand": "npm run build:packages && npm run build --workspace=@acra/web",
+  "outputDirectory": "apps/web/.next"
+}
