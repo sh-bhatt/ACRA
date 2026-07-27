@@ -51,14 +51,14 @@ export default async function NewReviewPage({
 
   const requestedReviewId =
     typeof resolvedSearchParams.reviewId ===
-    "string"
+      "string"
       ? resolvedSearchParams.reviewId
       : undefined;
 
   const initialReview = requestedReviewId
     ? await loadExistingPastedReview(
-        requestedReviewId,
-      )
+      requestedReviewId,
+    )
     : null;
 
   const initialLoadMessage =
@@ -93,7 +93,7 @@ export default async function NewReviewPage({
         </header>
 
         <div className="py-8">
-          <NewReviewForm
+          {/* <NewReviewForm
             initialReviewFocus={
               profile.default_review_focus
             }
@@ -101,7 +101,11 @@ export default async function NewReviewPage({
             initialLoadMessage={
               initialLoadMessage
             }
-          />
+          /> */}
+
+          <div className="text-white">
+            TEST PAGE
+          </div>
         </div>
       </div>
     </main>
