@@ -161,21 +161,23 @@ export async function forgotPasswordAction(
   const supabase = await createClient();
   const environment = getClientEnvironment();
 
-  const { error } =
-    await supabase.auth.resetPasswordForEmail(
-      parsedInput.data.email,
-      {
-        redirectTo:
-          `${environment.NEXT_PUBLIC_SITE_URL}/auth/callback`,
-      },
-    );
+  const { data, error } =
+  await supabase.auth.resetPasswordForEmail(
+    parsedInput.data.email,
+    {
+      redirectTo: "http://localhost:3000/auth/callback",
+    },
+  );
 
-  if (error) {
-    console.error(
-      "Password-reset request failed:",
-      error.message,
-    );
-  }
+console.log("Reset data:", data);
+console.log("Reset error:", error);
+
+if (error) {
+  return {
+    status: "error",
+    message: error.message,
+  };
+}
 
   // Intentionally generic to prevent email-address enumeration.
   return {
