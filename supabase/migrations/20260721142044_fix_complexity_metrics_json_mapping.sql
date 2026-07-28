@@ -144,7 +144,6 @@ parsed_maintainability_score :=
     parsed_maintainability_score
   )
   on conflict (
-    review_id,
     file_id
   )
   do update
