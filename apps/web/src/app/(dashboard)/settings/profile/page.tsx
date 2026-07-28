@@ -3,7 +3,11 @@ import { redirect } from "next/navigation";
 import { ProfileAvatar } from "@/features/profile/profile-avatar";
 import { ProfileForm } from "@/features/profile/profile-form";
 import { createClient } from "@/lib/supabase/server";
+import { Metadata } from "next";
 
+export const metadata: Metadata = {
+  title: "Profile",
+};
 export default async function ProfileSettingsPage() {
     const supabase = await createClient();
 

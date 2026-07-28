@@ -8,6 +8,11 @@ import {
   loadExistingPastedReview,
 } from "@/features/reviews/load-review-workspace";
 import { createClient } from "@/lib/supabase/server";
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Review Workspace",
+};
 
 type NewReviewPageProps = {
   searchParams: Promise<{
