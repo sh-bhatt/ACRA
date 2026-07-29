@@ -1,5 +1,6 @@
 import path from "node:path";
-
+import react from "eslint-plugin-react";
+import reactHooks from "eslint-plugin-react-hooks";
 import js from "@eslint/js";
 import { ESLint } from "eslint";
 import { defineConfig } from "eslint/config";
@@ -206,14 +207,14 @@ function mapIssue(
 
     ...(message.endLine !== undefined
       ? {
-          endLine: message.endLine,
-        }
+        endLine: message.endLine,
+      }
       : {}),
 
     ...(message.endColumn !== undefined
       ? {
-          endColumn: message.endColumn,
-        }
+        endColumn: message.endColumn,
+      }
       : {}),
 
     fatal: message.fatal === true,
@@ -232,19 +233,17 @@ export async function analyzeSourceWithEslint(
   const validatedInput =
     eslintAnalysisInputSchema.parse(input);
 
-  const virtualFilePath = path.resolve(
-    process.cwd(),
-    ".acra-virtual",
-    VIRTUAL_FILE_NAME_BY_LANGUAGE[
-      validatedInput.language
-    ],
-  );
-
   const results = await runWithTimeout(
     eslint.lintText(
       validatedInput.sourceText,
       {
-        filePath: virtualFilePath,
+        filePath:
+          validatedInput.language === "jsx"
+            ? "snippet.tsx"
+            : VIRTUAL_FILE_NAME_BY_LANGUAGE[
+            validatedInput.language
+            ],
+
         warnIgnored: false,
       },
     ),
@@ -252,6 +251,8 @@ export async function analyzeSourceWithEslint(
   );
 
   const result = results[0];
+  console.log("RESULTS LENGTH:", results.length);
+  console.log("RESULTS:", JSON.stringify(results, null, 2));
 
   if (!result) {
     throw new Error(

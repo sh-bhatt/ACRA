@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "npm run dev --workspace=@acra/web",
     "dev:web": "npm run dev --workspace=@acra/web",
-   "build": "npm run build:packages && npm run build --workspace=@acra/web",
+    "build": "npm run build:packages && npm run build --workspace=@acra/web",
     "lint": "npm run lint --workspace=@acra/web",
     "dev:worker": "npm run dev --workspace=@acra/worker",
     "build:worker": "npm run build --workspace=@acra/worker",
@@ -20,6 +20,8 @@
     "typecheck:all": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "supabase": "^2.109.1"
   },
   "dependencies": {

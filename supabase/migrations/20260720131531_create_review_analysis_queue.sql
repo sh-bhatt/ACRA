@@ -93,7 +93,7 @@ begin
       now()
     ) + interval '1 day';
 
-  if completed_today_count >= 20 then
+  if completed_today_count >= 200 then
     raise exception
       'Daily review quota reached';
   end if;
