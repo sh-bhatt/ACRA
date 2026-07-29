@@ -45,10 +45,22 @@ export async function generateAIReview(
       },
     });
 
-  const parsed =
-    JSON.parse(content);
+  const parsed = JSON.parse(content);
+  parsed.refactoringPlan ??= [];
 
-  return aiReviewResultSchema.parse(
-    parsed,
+  parsed.generatedDocumentation ??= null;
+
+  console.log("Has refactoringPlan?", "refactoringPlan" in parsed);
+  console.log("Has generatedDocumentation?", "generatedDocumentation" in parsed);
+
+  console.log(
+    JSON.stringify(parsed, null, 2)
   );
+
+  console.log(
+    typeof parsed.findings?.[2],
+    parsed.findings?.[2]
+  );
+
+  return aiReviewResultSchema.parse(parsed);
 }

@@ -544,7 +544,19 @@ export async function claimAndRunStaticAnalysisJob(
                     `category=${JSON.stringify(categoryCounts)}`,
                 ].join(" "),
             );
+            console.log("========== NORMALIZED FINDINGS ==========");
 
+            normalizedFindings.forEach((f, i) => {
+                console.log(i, {
+                    fingerprint: f.fingerprint,
+                    rule: f.finding.ruleId,
+                    title: f.finding.title,
+                    line: f.finding.lineStart,
+                    explanation: f.finding.explanation,
+                });
+            });
+
+            console.log("=========================================");
             const uniqueFingerprints = new Set(
                 normalizedFindings.map(
                     (normalizedFinding) =>

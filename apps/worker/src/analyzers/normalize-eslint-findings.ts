@@ -252,17 +252,20 @@ function getExplanation(
 
 function createFindingFingerprint(
   finding: ReviewFinding,
+  issue: EslintIssue,
 ): string {
-  const fingerprintPayload = JSON.stringify({
+   const fingerprintPayload = JSON.stringify({
     source: finding.source,
-    ruleId: finding.ruleId ?? null,
-    category: finding.category,
+    ruleId: finding.ruleId,
     fileName: finding.fileName,
-    lineStart: finding.lineStart ?? null,
-    lineEnd: finding.lineEnd ?? null,
-    explanation: finding.explanation
-      .trim()
-      .replace(/\s+/g, " "),
+
+    lineStart: finding.lineStart,
+    lineEnd: finding.lineEnd,
+
+    column: issue.column,
+    endColumn: issue.endColumn,
+    title: finding.title,
+    explanation: finding.explanation,
   });
 
   return createHash("sha256")
@@ -315,7 +318,7 @@ function normalizeSingleIssue(
   return {
     finding,
     fingerprint:
-      createFindingFingerprint(finding),
+      createFindingFingerprint(finding,issue),
   };
 }
 

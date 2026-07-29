@@ -191,6 +191,7 @@ async function runWithTimeout<T>(
 function mapIssue(
   message: ESLint.LintResult["messages"][number],
 ): EslintIssue {
+  console.log("RAW ESLINT MESSAGE", message);
   return {
     ruleId: message.ruleId,
 
