@@ -10,7 +10,86 @@ import {
 
 import { aiReviewJsonSchema } from "./ai-review-json-schema.js";
 
-import { createGroqChatCompletion } from "./groq-client.js";
+import {
+  createGroqChatCompletion,
+  GroqApiError,
+} from "./groq-client.js";
+
+const MAX_ATTEMPTS = 3;
+
+// Groq occasionally serializes array items (e.g. individual findings) as
+// JSON-encoded strings instead of nested objects, even when using
+// json_schema response mode. Detect and unwrap those before validation
+// so a cosmetic serialization quirk doesn't fail the whole review.
+function normalizeStringifiedObjects(
+  value: unknown,
+): unknown {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+
+  if (
+    !trimmed.startsWith("{") &&
+    !trimmed.startsWith("[")
+  ) {
+    return value;
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // Not actually JSON — leave as-is and let Zod report the real error.
+    return value;
+  }
+}
+
+function normalizeParsedReview(
+  parsed: Record<string, unknown>,
+): Record<string, unknown> {
+  if (Array.isArray(parsed.findings)) {
+    parsed.findings = parsed.findings.map(
+      normalizeStringifiedObjects,
+    );
+  }
+
+  parsed.refactoringPlan ??= [];
+  parsed.generatedDocumentation ??= null;
+
+  return parsed;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) =>
+    setTimeout(resolve, ms),
+  );
+}
+
+// Groq's 429 body includes a suggested wait time, e.g:
+// "Please try again in 28.4325s."
+// Fall back to a fixed delay if we can't parse one out.
+function extractRetryDelayMs(
+  message: string,
+): number {
+  const match = message.match(
+    /try again in ([\d.]+)s/i,
+  );
+
+  const rawSeconds = match?.[1];
+
+  if (rawSeconds !== undefined) {
+    const seconds =
+      Number.parseFloat(rawSeconds);
+
+    if (Number.isFinite(seconds)) {
+      // Small buffer on top of Groq's own estimate.
+      return Math.ceil(seconds * 1000) + 500;
+    }
+  }
+
+  return 5000;
+}
 
 export async function generateAIReview(
   input: BuildReviewPromptInput,
@@ -18,49 +97,91 @@ export async function generateAIReview(
   const prompt =
     buildReviewPrompt(input);
 
-  const content =
-    await createGroqChatCompletion({
-      messages: [
-        {
-          role: "system",
-          content:
-            prompt.systemPrompt,
-        },
-        {
-          role: "user",
-          content:
-            prompt.userPrompt,
-        },
-      ],
+  let lastError: unknown;
 
-      responseFormat: {
-        type: "json_schema",
+  for (
+    let attempt = 1;
+    attempt <= MAX_ATTEMPTS;
+    attempt += 1
+  ) {
+    try {
+      const content =
+        await createGroqChatCompletion({
+          messages: [
+            {
+              role: "system",
+              content:
+                prompt.systemPrompt,
+            },
+            {
+              role: "user",
+              content:
+                prompt.userPrompt,
+            },
+          ],
 
-        json_schema: {
-          name: "review",
+          responseFormat: {
+            type: "json_schema",
 
-          schema:
-            aiReviewJsonSchema,
-        },
-      },
-    });
+            json_schema: {
+              name: "review",
 
-  const parsed = JSON.parse(content);
-  parsed.refactoringPlan ??= [];
+              schema:
+                aiReviewJsonSchema,
+            },
+          },
+        });
 
-  parsed.generatedDocumentation ??= null;
+      const parsed =
+        normalizeParsedReview(
+          JSON.parse(content),
+        );
 
-  console.log("Has refactoringPlan?", "refactoringPlan" in parsed);
-  console.log("Has generatedDocumentation?", "generatedDocumentation" in parsed);
+      return aiReviewResultSchema.parse(
+        parsed,
+      );
+    } catch (error: unknown) {
+      lastError = error;
 
-  console.log(
-    JSON.stringify(parsed, null, 2)
-  );
+      const isLastAttempt =
+        attempt === MAX_ATTEMPTS;
 
-  console.log(
-    typeof parsed.findings?.[2],
-    parsed.findings?.[2]
-  );
+      if (
+        error instanceof GroqApiError &&
+        error.status === 429
+      ) {
+        const delayMs =
+          extractRetryDelayMs(
+            error.body,
+          );
 
-  return aiReviewResultSchema.parse(parsed);
+        console.warn(
+          [
+            `[ai] rate limited on attempt ${attempt}/${MAX_ATTEMPTS},`,
+            `waiting ${delayMs}ms before retry`,
+          ].join(" "),
+        );
+
+        if (!isLastAttempt) {
+          await sleep(delayMs);
+          continue;
+        }
+      } else {
+        console.warn(
+          [
+            `[ai] attempt ${attempt}/${MAX_ATTEMPTS} failed:`,
+            error instanceof Error
+              ? error.message
+              : String(error),
+          ].join(" "),
+        );
+
+        if (!isLastAttempt) {
+          continue;
+        }
+      }
+    }
+  }
+
+  throw lastError;
 }

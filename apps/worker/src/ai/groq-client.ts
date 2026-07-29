@@ -23,6 +23,29 @@ export type CreateGroqChatCompletionInput = {
   responseFormat?: GroqResponseFormat;
 };
 
+// Without an explicit cap, Groq falls back to a model default that can
+// be smaller than a full findings array needs, causing the response to
+// be truncated mid-JSON. Not read from env for now — add GROQ_MAX_TOKENS
+// to the env schema later if you want this configurable per-deploy.
+const DEFAULT_MAX_TOKENS = 4096;
+
+/**
+ * Thrown when the Groq API returns a non-OK response. Carries the HTTP
+ * status code so callers can distinguish retryable conditions (e.g. 429
+ * rate limits) from permanent failures (e.g. 400 invalid request).
+ */
+export class GroqApiError extends Error {
+  readonly status: number;
+  readonly body: string;
+
+  constructor(status: number, body: string) {
+    super(`Groq API returned ${status}: ${body}`);
+    this.name = "GroqApiError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
 export async function createGroqChatCompletion(
   input: CreateGroqChatCompletionInput,
 ): Promise<string> {
@@ -65,7 +88,9 @@ export async function createGroqChatCompletion(
 
             response_format:
               input.responseFormat,
-              max_tokens: 4096,
+
+            max_tokens:
+              DEFAULT_MAX_TOKENS,
           }),
 
           signal:
@@ -77,8 +102,9 @@ export async function createGroqChatCompletion(
       const body =
         await response.text();
 
-      throw new Error(
-        `Groq API returned ${response.status}: ${body}`,
+      throw new GroqApiError(
+        response.status,
+        body,
       );
     }
 
