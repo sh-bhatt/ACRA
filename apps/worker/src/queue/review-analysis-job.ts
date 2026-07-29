@@ -31,6 +31,11 @@ import {
     recordReviewAnalysisFailure,
 } from "../failures/review-analysis-failure.js";
 
+// Jobs that fail fast (e.g. AI provider validation errors) shouldn't
+// have to wait out a long visibility timeout before being retried.
+// Keep this short; raise it only if legitimate runs regularly exceed it.
+const QUEUE_VISIBILITY_TIMEOUT_SECONDS = 30;
+
 const reviewAnalysisMessageSchema = z
     .object({
         version: z.literal(1),
@@ -59,9 +64,7 @@ const claimedQueueRowSchema = z
     })
     .passthrough();
 
-type ReviewAnalysisMessage = z.infer<
-    typeof reviewAnalysisMessageSchema
->;
+type ReviewAnalysisMessage = z.infer<typeof reviewAnalysisMessageSchema>;
 
 function formatZodError(
     error: z.ZodError,
@@ -137,7 +140,8 @@ export async function claimAndRunStaticAnalysisJob(
     const { data, error } = await supabase.rpc(
         "read_review_analysis_job",
         {
-            visibility_timeout_seconds: 120,
+            visibility_timeout_seconds:
+                QUEUE_VISIBILITY_TIMEOUT_SECONDS,
         },
     );
 
@@ -544,19 +548,7 @@ export async function claimAndRunStaticAnalysisJob(
                     `category=${JSON.stringify(categoryCounts)}`,
                 ].join(" "),
             );
-            console.log("========== NORMALIZED FINDINGS ==========");
 
-            normalizedFindings.forEach((f, i) => {
-                console.log(i, {
-                    fingerprint: f.fingerprint,
-                    rule: f.finding.ruleId,
-                    title: f.finding.title,
-                    line: f.finding.lineStart,
-                    explanation: f.finding.explanation,
-                });
-            });
-
-            console.log("=========================================");
             const uniqueFingerprints = new Set(
                 normalizedFindings.map(
                     (normalizedFinding) =>
@@ -691,9 +683,7 @@ export async function claimAndRunStaticAnalysisJob(
                 files: scoreFiles,
             });
 
-        let aiReview: Awaited<
-            ReturnType<typeof generateAIReview>
-        > | null = null;
+        let aiReview: Awaited<ReturnType<typeof generateAIReview>> | null = null;
 
         if (
             workerEnvironment.AI_REVIEW_ENABLED
@@ -804,21 +794,15 @@ export async function claimAndRunStaticAnalysisJob(
         );
     } catch (error: unknown) {
 
-        console.error("================================");
-        console.error("RAW ERROR");
+        console.error(
+            "[queue] static-analysis attempt raised an error",
+        );
         console.error(error);
-        console.error("================================");
 
         const failure =
             classifyReviewAnalysisFailure(
                 error,
             );
-        console.error(
-            "RAW ERROR:",
-            error instanceof Error
-                ? error.stack
-                : error,
-        );
 
         const failureResult =
             await recordReviewAnalysisFailure(

@@ -65,6 +65,7 @@ export async function createGroqChatCompletion(
 
             response_format:
               input.responseFormat,
+              max_tokens: 4096,
           }),
 
           signal:
