@@ -74,6 +74,44 @@ export function classifyReviewAnalysisFailure(
       ? error.message
       : "";
 
+  // ---------- AI Provider Errors ----------
+
+  if (
+    message.includes("rate_limit_exceeded") ||
+    message.includes("Groq API returned 429")
+  ) {
+    const wait =
+      message.match(/Please try again in ([^.]+)/i)?.[1];
+
+    return {
+      safeMessage: wait
+        ? `AI review is temporarily unavailable because our AI provider has reached its usage limit. Please try again in ${wait}.`
+        : "AI review is temporarily unavailable because our AI provider has reached its usage limit. Please try again later.",
+      isUnrecoverable: false,
+    };
+  }
+
+  if (
+    message.includes("json_validate_failed")
+  ) {
+    return {
+      safeMessage:
+        "The AI provider generated an invalid structured response. The review will be retried automatically.",
+      isUnrecoverable: false,
+    };
+  }
+
+  if (
+    message.includes("context_length") ||
+    message.includes("maximum context")
+  ) {
+    return {
+      safeMessage:
+        "The submitted code is too large for AI analysis.",
+      isUnrecoverable: true,
+    };
+  }
+
   if (
     startsWithAny(message, [
       "Size mismatch for",

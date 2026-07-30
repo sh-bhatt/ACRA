@@ -798,6 +798,21 @@ export async function claimAndRunStaticAnalysisJob(
             "[queue] static-analysis attempt raised an error",
         );
         console.error(error);
+        let safeError = error;
+
+        if (    
+            error instanceof Error &&
+            error.message.includes("rate_limit_exceeded")
+        ) {
+            const wait =
+                error.message.match(/Please try again in ([^.]+)/i)?.[1];
+
+            safeError = new Error(
+                wait
+                    ? `AI review is temporarily unavailable because the AI provider token limit has been reached. Please try again in ${wait}.`
+                    : "AI review is temporarily unavailable because the AI provider token limit has been reached. Please try again later."
+            );
+        }
 
         const failure =
             classifyReviewAnalysisFailure(

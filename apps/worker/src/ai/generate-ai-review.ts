@@ -166,6 +166,17 @@ export async function generateAIReview(
           await sleep(delayMs);
           continue;
         }
+
+        const retryMatch = error.body.match(
+          /Please try again in ([^.]+)\./i,
+        );
+
+        const retryAfter =
+          retryMatch?.[1] ?? "a little while";
+
+        throw new Error(
+          `AI review is temporarily unavailable because our AI provider has reached its usage limit. Please try again in ${retryAfter}.`,
+        );
       } else {
         console.warn(
           [
@@ -183,5 +194,9 @@ export async function generateAIReview(
     }
   }
 
+  if (lastError instanceof Error) {
   throw lastError;
+}
+
+throw new Error("AI review failed.");
 }

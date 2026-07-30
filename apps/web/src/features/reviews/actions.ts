@@ -294,19 +294,18 @@ export async function createPastedReviewAction(
   revalidatePath("/dashboard");
 
   if (queueError) {
-    console.error(
-      "Unable to queue newly created review:",
-      queueError,
-    );
+  console.error(
+    "Unable to queue newly created review:",
+    queueError,
+  );
 
-    return {
-      status: "success",
-      message:
-        "Your secure review draft was created, but analysis could not be queued.",
-      reviewId: review.id,
-      queued: false,
-    };
-  }
+  return {
+    status: "error",
+    message: queueError.message,
+    reviewId: review.id,
+    queued: false,
+  };
+}
 
   return {
     status: "success",
@@ -345,17 +344,16 @@ export async function queueReviewAction(
   );
 
   if (error) {
-    console.error(
-      "Unable to queue review:",
-      error,
-    );
+  console.error(
+    "Unable to queue review:",
+    error,
+  );
 
-    return {
-      status: "error",
-      message:
-        "Unable to queue this review. Check that no other analysis is currently running.",
-    };
-  }
+  return {
+    status: "error",
+    message: error.message,
+  };
+}
 
   revalidatePath(
     `/reviews/${parsedInput.data.reviewId}`,
