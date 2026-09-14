@@ -134,7 +134,7 @@ function calculateSha256(
 
 export async function claimAndRunStaticAnalysisJob(
     supabase: WorkerSupabaseClient,
-): Promise<void> {
+): Promise<boolean> {
     const workerEnvironment = getWorkerEnvironment();
 
     const { data, error } = await supabase.rpc(
@@ -158,7 +158,7 @@ export async function claimAndRunStaticAnalysisJob(
             "[queue] no visible review-analysis job found",
         );
 
-        return;
+        return false;
     }
 
     const parsedQueueRow =
@@ -192,7 +192,7 @@ export async function claimAndRunStaticAnalysisJob(
             `[queue] deleted invalid msg_id=${claimedJob.msg_id}`,
         );
 
-        return;
+        return true;
     }
 
     console.log(
@@ -754,9 +754,7 @@ export async function claimAndRunStaticAnalysisJob(
          */
 
         if (aiReview) {
-            console.log(
-                "[ai] persisting review...",
-            );
+            
 
             await persistAIReview(
                 supabase,
@@ -852,7 +850,7 @@ export async function claimAndRunStaticAnalysisJob(
                 ].join(" "),
             );
 
-            return;
+            return true;
         }
 
         console.error(
@@ -862,5 +860,8 @@ export async function claimAndRunStaticAnalysisJob(
         console.error(
             `[queue] deleted permanently failed msg_id=${claimedJob.msg_id}`,
         );
+
+        
     }
+    return true;
 }

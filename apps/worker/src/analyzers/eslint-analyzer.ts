@@ -192,7 +192,7 @@ async function runWithTimeout<T>(
 function mapIssue(
   message: ESLint.LintResult["messages"][number],
 ): EslintIssue {
-  console.log("RAW ESLINT MESSAGE", message);
+  
   return {
     ruleId: message.ruleId,
 
@@ -251,8 +251,7 @@ export async function analyzeSourceWithEslint(
   );
 
   const result = results[0];
-  console.log("RESULTS LENGTH:", results.length);
-  console.log("RESULTS:", JSON.stringify(results, null, 2));
+  
 
   if (!result) {
     throw new Error(

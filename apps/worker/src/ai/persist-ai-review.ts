@@ -10,14 +10,7 @@ type PersistAIReviewInput = {
 
 
 
-console.log(
-  "SUPABASE KEY PREFIX:",
-  process.env.SUPABASE_SECRET_KEY?.substring(0, 20),
-);
-console.log(
-  "URL:",
-  process.env.SUPABASE_URL,
-);
+
 
 export async function persistAIReview(
   supabase: WorkerSupabaseClient,

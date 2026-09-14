@@ -54,16 +54,60 @@ function getSafeErrorMessage(
     .slice(0, 500);
 }
 
+function isOneShotMode(): boolean {
+  return process.env.WORKER_ONCE === "true";
+}
+
 export async function pollReviewAnalysisQueue(
   supabase: WorkerSupabaseClient,
   signal: AbortSignal,
 ): Promise<void> {
+  const oneShotMode = isOneShotMode();
+
   console.log(
     [
       "[poller] review-analysis queue polling started",
       `interval_ms=${QUEUE_POLL_INTERVAL_MS}`,
+      `mode=${oneShotMode ? "one-shot" : "continuous"}`,
     ].join(" "),
   );
+
+  if (oneShotMode) {
+    let processedJobs = 0;
+
+    while (!signal.aborted) {
+      try {
+        const jobClaimed =
+          await claimAndRunStaticAnalysisJob(
+            supabase,
+          );
+
+        if (!jobClaimed) {
+          break;
+        }
+
+        processedJobs += 1;
+      } catch (error: unknown) {
+        console.error(
+          [
+            "[poller] one-shot queue iteration failed",
+            `reason="${getSafeErrorMessage(error)}"`,
+          ].join(" "),
+        );
+
+        throw error;
+      }
+    }
+
+    console.log(
+      [
+        "[poller] one-shot queue drain completed",
+        `processed_jobs=${processedJobs}`,
+      ].join(" "),
+    );
+
+    return;
+  }
 
   while (!signal.aborted) {
     try {
