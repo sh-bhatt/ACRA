@@ -6,6 +6,9 @@ import {
     useState,
 } from "react";
 
+import {
+    AnalysisPipeline,
+} from "@/features/reviews/analysis-pipeline";
 import type {
     ReviewAnalysisSnapshotResult,
 } from "@/features/reviews/review-analysis-state";
@@ -320,6 +323,14 @@ export function ReviewAnalysisPanel({
                 </div>
             ) : null}
 
+            <AnalysisPipeline
+                status={snapshot.review.status}
+                hasStaticResults={
+                    snapshot.findings.length > 0 ||
+                    snapshot.complexityMetrics.length > 0
+                }
+            />
+
             {isDraft ? (
                 <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.07] p-6">
                     <h3 className="font-semibold text-amber-100">
@@ -331,28 +342,6 @@ export function ReviewAnalysisPanel({
                         job is currently running. Submit the editor
                         again to create and queue a fresh snapshot.
                     </p>
-                </div>
-            ) : null}
-
-            {!isDraft && !isCompleted && !isFailed ? (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
-                    <div className="flex items-center gap-3">
-                        <span className="size-2.5 animate-pulse rounded-full bg-emerald-300" />
-
-                        <div>
-                            <p className="text-sm font-medium text-neutral-200">
-                                {snapshot.review.status ===
-                                    "queued"
-                                    ? "Waiting for an analysis worker"
-                                    : "Static analysis is running"}
-                            </p>
-
-                            <p className="mt-1 text-xs text-neutral-500">
-                                Results refresh automatically every two
-                                seconds.
-                            </p>
-                        </div>
-                    </div>
                 </div>
             ) : null}
 
