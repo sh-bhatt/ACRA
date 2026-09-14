@@ -29,7 +29,7 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-	
+
       - name: Build ACRA worker
         run: npm run build:worker
 
